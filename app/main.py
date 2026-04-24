@@ -11,9 +11,10 @@ from fastapi.responses import JSONResponse
 
 from .auth import create_jwt, verify_jwt, verify_payload
 from .config import settings
-from .context import get_system_prompt, refresh_system_prompt
+from .context import get_system_prompt, refresh_system_prompt, get_context_file
 from .governor_registry import refresh_cache as refresh_governor_cache, load_governors
 from .kimi_client import KimiClient, KimiClientError, get_tool_schemas
+from .tools.github_tools import read_repo_file, search_codebase
 
 app = FastAPI(
     title="TrueSight DAO Governor Chatbot",
@@ -97,14 +98,73 @@ async def chat(request: Request) -> JSONResponse:
     history = _sessions.get(session_id, [])
     history.append({"role": "user", "content": user_message})
 
-    # Call Kimi
+    # Call Kimi with tools
     system_prompt = get_system_prompt()
     client = KimiClient()
+    tools = get_tool_schemas()
 
     try:
-        # Phase 1: no tools. Phase 2: pass tools=get_tool_schemas()
-        completion = client.chat(system_prompt, history)
-        assistant_text = client.extract_response_text(completion)
+        completion = client.chat(system_prompt, history, tools=tools)
+        assistant_message = completion["choices"][0].get("message", {})
+
+        # Handle tool calls
+        tool_calls = assistant_message.get("tool_calls", [])
+        if tool_calls:
+            history.append({
+                "role": "assistant",
+                "content": assistant_message.get("content", ""),
+                "tool_calls": [
+                    {
+                        "id": tc["id"],
+                        "type": tc["type"],
+                        "function": {
+                            "name": tc["function"]["name"],
+                            "arguments": tc["function"]["arguments"],
+                        },
+                    }
+                    for tc in tool_calls
+                ],
+            })
+
+            for tc in tool_calls:
+                func_name = tc["function"]["name"]
+                func_args = json.loads(tc["function"]["arguments"])
+                tool_call_id = tc["id"]
+
+                if func_name == "read_context_file":
+                    result = get_context_file(func_args.get("path", ""))
+                    result_text = result if result else "File not found."
+                elif func_name == "read_repo_file":
+                    result = read_repo_file(
+                        func_args.get("repo", ""),
+                        func_args.get("path", ""),
+                        func_args.get("ref", "main"),
+                    )
+                    if result.get("type") == "file":
+                        result_text = result["content"]
+                    elif result.get("type") == "directory":
+                        result_text = "Directory listing:\n" + "\n".join(
+                            f"- {e['name']} ({e['type']})" for e in result.get("entries", [])
+                        )
+                    else:
+                        result_text = f"Error: {result.get('error', 'unknown')}"
+                elif func_name == "create_dao_submission":
+                    result_text = "DAO submission tool is not yet enabled in Phase 1. Please describe your work and I will help you compile it."
+                else:
+                    result_text = f"Unknown tool: {func_name}"
+
+                history.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": result_text,
+                })
+
+            # Re-call with tool results
+            completion = client.chat(system_prompt, history, tools=tools)
+            assistant_text = client.extract_response_text(completion)
+        else:
+            assistant_text = client.extract_response_text(completion)
+
     except KimiClientError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -116,7 +176,6 @@ async def chat(request: Request) -> JSONResponse:
             embedded = json.loads(json_match.group(1))
             if "proposal" in embedded:
                 proposal = embedded["proposal"]
-                # Strip the JSON block from display text
                 assistant_text = re.sub(r"```json\s*\{.*?\}\s*```", "", assistant_text, flags=re.DOTALL).strip()
     except Exception:
         pass

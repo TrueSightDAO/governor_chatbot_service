@@ -206,3 +206,10 @@ localStorage.setItem('governorChatApiUrl', 'http://localhost:8000');
 ## License
 
 Same as TrueSight DAO workspace.
+
+## Deployment Status
+
+- **Phase 1 (Read-Only Q&A):** Deployed to \`seni_ror\` (54.211.179.126:8000), proxied via \`krake_ng\` at \`https://chatbot.truesight.me\`
+- **LLM:** Grok (xAI) — \`grok-3-latest\`
+- **Auth:** RSA signature verification against live treasury-cache registry
+- **Access:** Architect-only (Gary Teh) for initial rollout

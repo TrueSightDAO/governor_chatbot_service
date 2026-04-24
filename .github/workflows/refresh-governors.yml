@@ -1,0 +1,73 @@
+# Refresh governors.json from the TrueSight DAO Main Ledger
+# and commit it back to this repo so the EC2 service can fetch
+# the canonical file via raw.githubusercontent.com.
+#
+# Runs on a schedule (daily) or via workflow_dispatch for manual refresh.
+#
+# Required secrets:
+#   GOOGLE_CREDENTIALS_JSON  — service-account JSON with Sheets read access
+#                              to the Main Ledger spreadsheet.
+#   ORACLE_ADVISORY_PUSH_TOKEN — fine-grained PAT with Contents: Read+Write
+#                              on TrueSightDAO/governor_chatbot_service.
+#                              (Classic PAT with `repo` scope also works.)
+#
+# The EC2 auth layer fetches:
+#   https://raw.githubusercontent.com/TrueSightDAO/governor_chatbot_service/main/governors.json
+# and caches it for GOVERNORS_CACHE_TTL_SECONDS (default: 300).
+
+name: Refresh Governor Registry
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily at 06:00 UTC (before most activity, after any overnight changes).
+    - cron: "0 6 * * *"
+
+concurrency:
+  group: refresh-governors
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout governor_chatbot_service
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ORACLE_ADVISORY_PUSH_TOKEN }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-auth google-api-python-client
+
+      - name: Refresh governors.json from Main Ledger
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOVERNORS_SPREADSHEET_ID: "1GE7PUq-UT6x2rBN-Q2ksogbWpgyuh2SaxJyG_uEK6PU"
+          GOVERNORS_SHEET_TAB: "Contributors contact information"
+        run: |
+          python3 scripts/refresh_governors.py --output governors.json
+
+      - name: Commit and push if changed
+        env:
+          TARGET_TOKEN: ${{ secrets.ORACLE_ADVISORY_PUSH_TOKEN }}
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add governors.json
+          if git diff --staged --quiet; then
+            echo "No changes to governors.json — skipping commit."
+          else
+            git commit -m "chore(governors): refresh from Main Ledger [skip ci]"
+            git push origin main
+            echo "Committed updated governors.json"
+          fi

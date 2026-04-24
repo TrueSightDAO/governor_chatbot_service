@@ -11,6 +11,7 @@ from fastapi import HTTPException, Request, status
 from jose import JWTError, jwt
 
 from .config import settings
+from .governor_registry import is_governor as _is_governor_from_registry
 
 # In-memory nonce cache (replace with Redis in production)
 _seen_nonces: set[str] = set()
@@ -103,24 +104,12 @@ def verify_payload(payload: dict, signature: str, public_key_b64: str) -> None:
 
 
 def is_governor(public_key_b64: str) -> bool:
-    """Check if a public key belongs to a registered governor."""
-    if settings.governor_registry_source == "static":
-        return _check_static_governors(public_key_b64)
-    # TODO: implement Edgar API and Sheet-based governor checks
-    return True  # permissive fallback for local development
+    """Check if a public key belongs to a registered governor.
 
-
-def _check_static_governors(public_key_b64: str) -> bool:
-    if not settings.static_governors_json or not settings.static_governors_json.exists():
-        return True  # permissive in dev if no file
-    import json as _json
-
-    data = _json.loads(settings.static_governors_json.read_text())
-    governors = data if isinstance(data, list) else data.get("governors", [])
-    for g in governors:
-        if g.get("public_key") == public_key_b64:
-            return True
-    return False
+    Uses the governor registry module which fetches from raw.githubusercontent.com
+    with in-memory caching. Falls back to local file, then permissive in dev.
+    """
+    return _is_governor_from_registry(public_key_b64)
 
 
 def create_jwt(public_key_b64: str) -> str:

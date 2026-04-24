@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from .auth import create_jwt, verify_jwt, verify_payload
 from .config import settings
 from .context import get_system_prompt, refresh_system_prompt
+from .governor_registry import refresh_cache as refresh_governor_cache, load_governors
 from .kimi_client import KimiClient, KimiClientError, get_tool_schemas
 
 app = FastAPI(
@@ -34,8 +35,15 @@ _sessions: dict[str, list[dict[str, str]]] = {}
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "version": "0.1.0"}
+async def health():
+    gov_data = load_governors()
+    return {
+        "status": "ok",
+        "version": "0.1.0",
+        "governors_count": len(gov_data.get("governors", [])),
+        "governors_updated_at": gov_data.get("updated_at", ""),
+        "governors_source": gov_data.get("source", ""),
+    }
 
 
 @app.post("/auth/challenge")
@@ -126,12 +134,40 @@ async def chat(request: Request) -> JSONResponse:
 @app.post("/refresh-context")
 async def refresh_context(request: Request) -> JSONResponse:
     """Admin endpoint to rebuild the system prompt cache."""
-    # TODO: restrict to admin/governor
     verify_jwt(request)
     new_prompt = refresh_system_prompt()
     return JSONResponse({
         "status": "refreshed",
         "prompt_length": len(new_prompt),
+    })
+
+
+@app.get("/governors")
+async def list_governors(request: Request) -> JSONResponse:
+    """List registered governors (public keys redacted for security)."""
+    verify_jwt(request)
+    data = load_governors()
+    governors = data.get("governors", [])
+    return JSONResponse({
+        "count": len(governors),
+        "updated_at": data.get("updated_at", ""),
+        "source": data.get("source", ""),
+        "governors": [
+            {"name": g.get("name"), "email": g.get("email"), "status": g.get("status")}
+            for g in governors
+        ],
+    })
+
+
+@app.post("/governors/refresh")
+async def force_refresh_governors(request: Request) -> JSONResponse:
+    """Force a fresh fetch of governors.json from GitHub."""
+    verify_jwt(request)
+    data = refresh_governor_cache()
+    return JSONResponse({
+        "status": "refreshed",
+        "count": len(data.get("governors", [])),
+        "updated_at": data.get("updated_at", ""),
     })
 
 

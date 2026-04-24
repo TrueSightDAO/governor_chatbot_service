@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     # Governor registry
     governor_registry_source: str = os.getenv("GOVERNOR_REGISTRY_SOURCE", "static")  # "edgar" | "sheet" | "static"
-    static_governors_json: Path | None = Path(os.getenv("STATIC_GOVERNORS_JSON")) if os.getenv("STATIC_GOVERNORS_JSON") else None
+    static_governors_json: Path | None = None
 
     # Edgar (Phase 2)
     edgar_api_url: str = os.getenv("EDGAR_API_URL", "https://edgar.truesight.me")

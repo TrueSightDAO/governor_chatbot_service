@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "updated_at": "2026-04-24T00:00:00Z",
+  "source": "static",
+  "governors": [
+    {
+      "public_key": "paste-base64-spki-here",
+      "name": "Example Governor",
+      "email": "governor@truesight.me",
+      "since": "2026-04-24"
+    }
+  ],
+  "_comment": "Copy this file to governors.json and populate with real governor public keys. The public_key must be the base64 SPKI string that the DApp stores in localStorage."
+}

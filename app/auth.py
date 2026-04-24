@@ -99,7 +99,7 @@ def verify_payload(payload: dict, signature: str, public_key_b64: str) -> None:
     if not is_governor(public_key_b64):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Public key is not recognized as a governor.",
+            detail="Governor Chat is currently restricted to the architect (Gary Teh) only. Access for other governors will be enabled soon.",
         )
 
 

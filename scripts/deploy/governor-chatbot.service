@@ -1,0 +1,16 @@
+[Unit]
+Description=TrueSight DAO Governor Chatbot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/governor_chatbot
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/governor_chatbot/.env
+ExecStart=/opt/governor_chatbot/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

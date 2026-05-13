@@ -1,10 +1,7 @@
 {
-  "_note": "DEPRECATED — this file is no longer used by the Governor Chatbot Service.",
-  "_reason": "The chatbot now reads the live dao_members.json from treasury-cache and filters by GOVERNOR_NAMES env var.",
-  "_live_source": "https://raw.githubusercontent.com/TrueSightDAO/treasury-cache/main/dao_members.json",
-  "_docs": "See app/governor_registry.py for implementation details.",
-  "version": 2,
-  "updated_at": "2026-04-24T12:00:00Z",
-  "source": "deprecated",
+  "version": 1,
+  "updated_at": "2026-05-13T08:53:18.409253Z",
+  "source": "Contributors contact information",
+  "spreadsheet_id": "1GE7PUq-UT6x2rBN-Q2ksogbWpgyuh2SaxJyG_uEK6PU",
   "governors": []
 }

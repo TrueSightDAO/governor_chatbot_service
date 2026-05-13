@@ -7,9 +7,13 @@
 # Required secrets:
 #   GOOGLE_CREDENTIALS_JSON  — service-account JSON with Sheets read access
 #                              to the Main Ledger spreadsheet.
-#   ORACLE_ADVISORY_PUSH_TOKEN — fine-grained PAT with Contents: Read+Write
-#                              on TrueSightDAO/governor_chatbot_service.
-#                              (Classic PAT with `repo` scope also works.)
+#
+# Auth model: we use the default GITHUB_TOKEN (scoped via `permissions:` below)
+# for the same-repo checkout + push. No PAT needed because this workflow only
+# writes back to its OWN repository. If `main` ever gets branch protection that
+# blocks GitHub Actions pushes, switch back to a fine-grained PAT
+# (Contents: Read+Write on TrueSightDAO/governor_chatbot_service) wired to a
+# repo-scoped secret like REFRESH_GOVERNORS_PUSH_TOKEN.
 #
 # The EC2 auth layer fetches:
 #   https://raw.githubusercontent.com/TrueSightDAO/governor_chatbot_service/main/governors.json
@@ -22,6 +26,11 @@ on:
   schedule:
     # Daily at 06:00 UTC (before most activity, after any overnight changes).
     - cron: "0 6 * * *"
+
+permissions:
+  # GITHUB_TOKEN needs write to commit + push the refreshed governors.json
+  # back to main. Read defaults are preserved implicitly for everything else.
+  contents: write
 
 concurrency:
   group: refresh-governors
@@ -36,7 +45,6 @@ jobs:
       - name: Checkout governor_chatbot_service
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.ORACLE_ADVISORY_PUSH_TOKEN }}
           fetch-depth: 1
 
       - name: Set up Python
@@ -58,9 +66,10 @@ jobs:
           python3 scripts/refresh_governors.py --output governors.json
 
       - name: Commit and push if changed
-        env:
-          TARGET_TOKEN: ${{ secrets.ORACLE_ADVISORY_PUSH_TOKEN }}
         run: |
+          # actions/checkout@v4 already persisted GITHUB_TOKEN into .git/config,
+          # so `git push origin main` here authenticates as github-actions[bot]
+          # with the workflow-level `permissions: contents: write` granted above.
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git add governors.json
